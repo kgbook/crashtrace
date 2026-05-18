@@ -1,5 +1,6 @@
 .sisyphus
-CLAUDE.md
 .idea
 build
-AGENTS.md
+build-debug
+artifacts
+blog

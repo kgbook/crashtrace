@@ -4,3 +4,6 @@
 [submodule "third_party/SpdlogHelper"]
 	path = third_party/SpdlogHelper
 	url = https://github.com/kgbook/SpdlogHelper.git
+[submodule "third_party/libunwind"]
+	path = third_party/libunwind
+	url = https://github.com/libunwind/libunwind.git
