@@ -132,11 +132,11 @@ ModuleAddress resolve_module_address(uintptr_t pc) {
     return result;
 }
 
+#if !defined(__APPLE__)
 std::vector<uintptr_t> collect_unwind_frames(const DumpOptions& options) {
     std::vector<uintptr_t> pcs;
     pcs.reserve(options.max_frames);
 
-#if !defined(__APPLE__)
     unw_context_t context;
     unw_cursor_t cursor;
     if (unw_getcontext(&context) < 0 || unw_init_local(&cursor, &context) < 0) {
@@ -160,7 +160,12 @@ std::vector<uintptr_t> collect_unwind_frames(const DumpOptions& options) {
     } while (pcs.size() < options.max_frames && unw_step(&cursor) > 0);
 
     return pcs;
+}
 #else
+std::vector<uintptr_t> collect_unwind_frames(const DumpOptions& options) {
+    std::vector<uintptr_t> pcs;
+    pcs.reserve(options.max_frames);
+
     struct CallbackContext {
         std::vector<uintptr_t>* pcs = nullptr;
         std::size_t max_frames = 0;
@@ -194,8 +199,8 @@ std::vector<uintptr_t> collect_unwind_frames(const DumpOptions& options) {
         &context);
 
     return pcs;
-#endif
 }
+#endif
 
 bool parse_hex(const char* value, uintptr_t* out) {
     if (value == nullptr || out == nullptr) {

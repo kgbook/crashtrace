@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.16)
 
-project(backtrace_demo LANGUAGES C CXX)
+project(crashtrace LANGUAGES C CXX)
 
 if (NOT CMAKE_CONFIGURATION_TYPES AND NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
