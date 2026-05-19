@@ -138,6 +138,7 @@ macOS 额外依赖：
 
 - CMake 不硬编码工具链 PATH。
 - `scripts/*.sh` 会加载 `scripts/env.sh`。
+- 脚本默认把 `/usr/bin:/bin:/usr/sbin:/sbin` 放到 PATH 前面，macOS 下会追加 `/opt/homebrew/bin`，避免外部 SDK 覆盖 autotools 依赖的 `diff` 等系统工具。
 - 临时指定 PATH 前缀可用 `CRASHTRACE_PATH_PREPEND`。
 - 机器级配置可复制 `scripts/local_env.sh.example` 为 `scripts/local_env.sh` 后编辑；该文件已被 git 忽略。
 

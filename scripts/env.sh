@@ -3,13 +3,20 @@
 # Script-level environment hooks. Keep toolchain PATH choices out of CMake.
 #
 # Usage options:
-#   CRASHTRACE_PATH_PREPEND="/usr/bin:/bin" ./scripts/build_release_symbols.sh
+#   CRASHTRACE_PATH_PREPEND="/opt/cross/bin" ./scripts/build_release_symbols.sh
 #   cp scripts/local_env.sh.example scripts/local_env.sh
 #
 # scripts/local_env.sh is intentionally gitignored for machine-specific setup.
 
+CRASHTRACE_SYSTEM_PATH="/usr/bin:/bin:/usr/sbin:/sbin"
+if [[ "$(uname -s)" == "Darwin" && -d "/opt/homebrew/bin" ]]; then
+    CRASHTRACE_SYSTEM_PATH="${CRASHTRACE_SYSTEM_PATH}:/opt/homebrew/bin"
+fi
+
 if [[ -n "${CRASHTRACE_PATH_PREPEND:-}" ]]; then
-    export PATH="${CRASHTRACE_PATH_PREPEND}:${PATH}"
+    export PATH="${CRASHTRACE_PATH_PREPEND}:${CRASHTRACE_SYSTEM_PATH}:${PATH}"
+else
+    export PATH="${CRASHTRACE_SYSTEM_PATH}:${PATH}"
 fi
 
 SCRIPT_ENV_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

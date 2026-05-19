@@ -14,7 +14,7 @@ Linux builds require autotools because the GNU `libunwind` submodule provides `c
 sudo apt-get install -y autoconf automake libtool binutils
 ```
 
-Build scripts source `scripts/env.sh` before invoking CMake or tooling. Use one of these script-level mechanisms for machine-specific PATH setup:
+Build scripts source `scripts/env.sh` before invoking CMake or tooling. The script puts `/usr/bin:/bin:/usr/sbin:/sbin` first, and adds `/opt/homebrew/bin` on macOS, so external SDKs do not override autotools-critical commands such as `diff`. Use one of these script-level mechanisms for machine-specific PATH setup:
 
 ```bash
 CRASHTRACE_PATH_PREPEND="/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin" \
