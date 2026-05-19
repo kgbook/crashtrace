@@ -1,0 +1,65 @@
+name: ci
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.runs_on }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS x86_64
+            runs_on: macos-13
+            setup: true
+            cmake_args: >-
+              -DCMAKE_BUILD_TYPE=RelWithDebInfo
+          - name: macOS arm64
+            runs_on: macos-14
+            setup: true
+            cmake_args: >-
+              -DCMAKE_BUILD_TYPE=RelWithDebInfo
+          - name: Linux x86_64
+            runs_on: ubuntu-latest
+            setup: sudo apt-get update && sudo apt-get install -y autoconf automake libtool
+            cmake_args: >-
+              -DCMAKE_BUILD_TYPE=RelWithDebInfo
+          - name: Linux arm64
+            runs_on: ubuntu-24.04-arm
+            setup: sudo apt-get update && sudo apt-get install -y autoconf automake libtool
+            cmake_args: >-
+              -DCMAKE_BUILD_TYPE=RelWithDebInfo
+          - name: Linux arm32
+            runs_on: ubuntu-latest
+            setup: >-
+              sudo apt-get update &&
+              sudo apt-get install -y
+              autoconf automake libtool
+              gcc-arm-linux-gnueabihf g++-arm-linux-gnueabihf
+              binutils-arm-linux-gnueabihf
+            cmake_args: >-
+              -DCMAKE_BUILD_TYPE=RelWithDebInfo
+              -DCMAKE_SYSTEM_NAME=Linux
+              -DCMAKE_SYSTEM_PROCESSOR=arm
+              -DCMAKE_C_COMPILER=arm-linux-gnueabihf-gcc
+              -DCMAKE_CXX_COMPILER=arm-linux-gnueabihf-g++
+              -DBACKTRACE_DEMO_AUTOTOOLS_HOST_TRIPLE=arm-linux-gnueabihf
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install dependencies
+        run: ${{ matrix.setup }}
+
+      - name: Configure
+        run: cmake -S . -B build ${{ matrix.cmake_args }}
+
+      - name: Build
+        run: cmake --build build --parallel --target backtrace_debug_direct backtrace_collector backtrace_symbolizer

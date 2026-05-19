@@ -16,6 +16,8 @@
 
 namespace {
 
+constexpr const char* LOG_TAG = "crashtrace_debug_demo";
+
 const char* g_executable_path = nullptr;
 
 const char* resolve_executable_path(const char* argv0) {
@@ -59,7 +61,7 @@ BACKTRACE_DEMO_NOINLINE void doSomething() {
 }  // namespace
 
 int main(int argc, char** argv) {
-    std::fprintf(stderr, "BTDEMO_START mode=debug_direct\n");
+    std::fprintf(stderr, "%s: START mode=debug_direct\n", LOG_TAG);
     g_executable_path = resolve_executable_path(argc > 0 ? argv[0] : nullptr);
     signal_handle_init();
     doSomething();

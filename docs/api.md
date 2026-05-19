@@ -20,8 +20,8 @@ int crashtrace::dump_release_stack_addresses(FILE* output,
 输出示例：
 
 ```text
-BTDEMO_CRASH_V1 signal=11 fault=0x0 pid=45662
-BTDEMO_FRAME index=0 pc=0x1045c0e5c module_base=0x1045c0000 module_offset=0xe5c object_pc=0x100000e5c module=/path/backtrace_collector
+crashtrace_collector: CRASH signal=11 fault=0x0 pid=45662
+crashtrace_collector: FRAME index=0 pc=0x1045c0e5c module_base=0x1045c0000 module_offset=0xe5c object_pc=0x100000e5c module=/path/backtrace_collector
 ```
 
 ## 2. Release 离线解析
@@ -33,6 +33,8 @@ int crashtrace::symbolize_release_stack(FILE* output,
 ```
 
 用于开发侧。输入接口 1 生成的日志和同版本符号文件，输出源码文件、行号、函数名。
+
+解析器只消费 `crashtrace_collector: FRAME ...` 行；`crashtrace_collector: CRASH ...` 和其他业务日志会被忽略。
 
 ## 3. Debug 直接解析
 
@@ -61,3 +63,10 @@ struct DumpOptions {
 ## 注意
 
 这些接口用于演示基础能力封装。真实生产环境中，signal handler 里应尽量避免复杂 I/O、锁和堆分配，可将地址采集结果写入预分配缓冲区或最小化日志通道。
+
+栈地址采集按平台分支：
+
+- Linux/ELF: 使用 `third_party/libunwind` 构建出的 shared GNU `libunwind*.so*`。
+- macOS/Mach-O: 使用编译器运行时 `_Unwind_Backtrace`，避免依赖系统或包管理器 libunwind。
+
+符号解析始终使用 `third_party/libbacktrace`。

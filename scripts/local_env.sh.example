@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+
+# Copy this file to scripts/local_env.sh and edit it for your machine.
+# scripts/local_env.sh is ignored by git.
+
+# Example for macOS when autotools/coreutils installed by Homebrew interfere with
+# vendored autotools projects. Put system tools first, then Homebrew tools.
+# export PATH="/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin:${PATH}"
+
+# Example for Linux cross-compilation toolchains installed outside system PATH.
+# export PATH="/opt/toolchains/arm-linux-gnueabihf/bin:${PATH}"

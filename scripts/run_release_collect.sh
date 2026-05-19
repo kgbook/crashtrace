@@ -3,6 +3,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+source "${SCRIPT_DIR}/env.sh"
 COLLECTOR="${1:-${ROOT_DIR}/artifacts/release/backtrace_collector}"
 LOG_PATH="${2:-${ROOT_DIR}/artifacts/crash_frames.log}"
 

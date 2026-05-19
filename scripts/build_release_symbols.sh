@@ -3,12 +3,25 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+source "${SCRIPT_DIR}/env.sh"
 BUILD_DIR="${ROOT_DIR}/build"
 ARTIFACT_DIR="${ROOT_DIR}/artifacts"
 RELEASE_DIR="${ARTIFACT_DIR}/release"
 SYMBOLS_DIR="${ARTIFACT_DIR}/symbols"
 TOOLS_DIR="${ARTIFACT_DIR}/tools"
 SDK_DIR="${ARTIFACT_DIR}/sdk"
+
+case "$(uname -s)" in
+    Darwin)
+        CRASHTRACE_LIBRARY_NAME="libcrashtrace.dylib"
+        ;;
+    Linux)
+        CRASHTRACE_LIBRARY_NAME="libcrashtrace.so"
+        ;;
+    *)
+        CRASHTRACE_LIBRARY_NAME="libcrashtrace.so"
+        ;;
+esac
 
 cmake -S "${ROOT_DIR}" -B "${BUILD_DIR}" -DCMAKE_BUILD_TYPE=Release "$@"
 cmake --build "${BUILD_DIR}" --target backtrace_collector backtrace_symbolizer
@@ -18,8 +31,21 @@ mkdir -p "${RELEASE_DIR}" "${SYMBOLS_DIR}" "${TOOLS_DIR}" "${SDK_DIR}/include"
 
 cp "${BUILD_DIR}/backtrace_collector" "${RELEASE_DIR}/backtrace_collector"
 cp "${BUILD_DIR}/backtrace_symbolizer" "${TOOLS_DIR}/backtrace_symbolizer"
-cp "${BUILD_DIR}/libcrashtrace.a" "${SDK_DIR}/libcrashtrace.a"
+cp "${BUILD_DIR}/${CRASHTRACE_LIBRARY_NAME}" "${RELEASE_DIR}/${CRASHTRACE_LIBRARY_NAME}"
+cp "${BUILD_DIR}/${CRASHTRACE_LIBRARY_NAME}" "${TOOLS_DIR}/${CRASHTRACE_LIBRARY_NAME}"
+cp "${BUILD_DIR}/${CRASHTRACE_LIBRARY_NAME}" "${SDK_DIR}/${CRASHTRACE_LIBRARY_NAME}"
 cp -R "${ROOT_DIR}/lib/include/." "${SDK_DIR}/include/"
+
+copy_linux_libunwind_runtime() {
+    local libunwind_dir="${BUILD_DIR}/libunwind-install/lib"
+    if [[ ! -d "${libunwind_dir}" ]]; then
+        return
+    fi
+
+    cp -P "${libunwind_dir}"/libunwind*.so* "${RELEASE_DIR}/"
+    cp -P "${libunwind_dir}"/libunwind*.so* "${TOOLS_DIR}/"
+    cp -P "${libunwind_dir}"/libunwind*.so* "${SDK_DIR}/"
+}
 
 case "$(uname -s)" in
     Darwin)
@@ -33,6 +59,7 @@ case "$(uname -s)" in
         strip -S "${RELEASE_DIR}/backtrace_collector"
         ;;
     Linux)
+        copy_linux_libunwind_runtime
         if ! command -v objcopy >/dev/null 2>&1; then
             echo "objcopy is required on Linux to split debug symbols" >&2
             exit 1

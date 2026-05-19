@@ -1,4 +1,4 @@
-add_library(crashtrace STATIC
+add_library(crashtrace SHARED
     src/crashtrace.cpp
 )
 
@@ -10,9 +10,14 @@ target_include_directories(crashtrace PRIVATE
 )
 target_link_libraries(crashtrace PUBLIC
     libbacktrace::libbacktrace
-    libunwind::libunwind
     Threads::Threads
     ${CMAKE_DL_LIBS}
 )
+
+if (TARGET libunwind::libunwind)
+    target_link_libraries(crashtrace PUBLIC
+        libunwind::libunwind
+    )
+endif()
 
 configure_crashtrace_target(crashtrace)

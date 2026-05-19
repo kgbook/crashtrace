@@ -2,7 +2,7 @@
 
 这个工程把 C++ 崩溃栈能力拆成库、demo、工具和文档四层：
 
-- `lib/`: `crashtrace` 静态库，封装 3 个公开接口。
+- `lib/`: `crashtrace` 动态库，封装 3 个公开接口。
 - `demo/`: 两个运行场景的示例程序。
 - `tools/`: release 崩溃日志的离线解析工具。
 - `scripts/`: 构建、运行、解析脚本。
@@ -10,7 +10,7 @@
 
 ## 三个接口
 
-公开头文件：[crashtrace.hpp](/Volumes/workspace/me/backtrace-demo/lib/include/crashtrace/crashtrace.hpp)
+公开头文件：[crashtrace.hpp](lib/include/crashtrace/crashtrace.hpp)
 
 ```cpp
 namespace crashtrace {
@@ -61,18 +61,22 @@ int dump_debug_stack_symbols(FILE* output,
 ./scripts/symbolize_release_log.sh
 ```
 
+`run_release_collect.sh` 里使用 shell 重定向保存日志，只是 demo 为了演示完整流程。实际项目中更建议把 `dump_release_stack_addresses()` 的输出接入现有日志库、崩溃上报 SDK 或预分配的崩溃日志文件，并随日志一起带上版本号、git commit、build id 等信息，方便服务端用同版本符号文件离线解析。
+
+离线解析只处理 `crashtrace_collector: FRAME ...` 行。`crashtrace_collector: CRASH ...` 只记录崩溃摘要，其他业务日志、其他 `LOG_TAG` 或无 tag 的行都会被 `symbolize_release_stack()` 忽略。
+
 生成产物：
 
 - `artifacts/release/backtrace_collector`: 模拟生产部署的 stripped release 二进制。
 - `artifacts/symbols/`: 开发侧保存的同版本符号文件。
 - `artifacts/tools/backtrace_symbolizer`: 调用接口 2 的离线工具。
-- `artifacts/sdk/`: `libcrashtrace.a` 和公开头文件。
+- `artifacts/release/`、`artifacts/tools/`、`artifacts/sdk/`: `libcrashtrace.so`/`libcrashtrace.dylib`、Linux vendored `libunwind*.so*` 运行库和公开头文件。
 
 ## 为什么这样拆
 
 `libbacktrace` 也能通过 `backtrace_full()` 遍历栈并拿到 PC，同时尝试符号化。Debug 场景下可以直接使用它。
 
-生产环境更推荐用 `libunwind` 拿地址、用 `libbacktrace` 离线解析：
+生产环境更推荐先拿地址、再用 `libbacktrace` 离线解析：
 
 - 生产二进制不带 debug 符号。
 - 崩溃现场只做轻量地址采集，不做 DWARF/dSYM 解析。
@@ -100,15 +104,13 @@ docs/
   workflow.md
 ```
 
-## libunwind / libbacktrace 依赖
+## 构建依赖
 
-`libbacktrace` 固定从 `third_party/libbacktrace` 源码集成。
+本仓库不依赖包管理器提供的 `libunwind` 或 `libbacktrace`：
 
-`libunwind` 支持三种 provider：
-
-- `auto`: 默认。优先构建 `third_party/libunwind`；如果缺少 `autoreconf` 或源码不可用，回退系统/SDK `libunwind`。
-- `bundled`: 强制构建 `third_party/libunwind`。
-- `system`: 强制使用系统/SDK `libunwind`。
+- `libbacktrace`: 固定从 `third_party/libbacktrace` 源码构建。
+- Linux/ELF `libunwind`: 固定从 `third_party/libunwind` 源码构建为 shared `.so`，不链接系统或包管理器版本。
+- macOS: GNU `libunwind` 的本地 unwinder 依赖 ELF 头和 `link.h`，不适合作为 Mach-O 本地 unwinder；macOS 使用编译器运行时的 `_Unwind_Backtrace` 采集 PC，符号解析仍使用 vendored `libbacktrace`。
 
 初始化 submodule：
 
@@ -116,13 +118,57 @@ docs/
 git submodule update --init --recursive
 ```
 
-GNU `libunwind` 仓库不提交生成后的 `configure`。如果使用 `bundled` provider，构建机需要 autotools 来从源码生成构建脚本：
+通用依赖：
+
+- CMake 3.16+
+- C/C++17 编译器
+- `make` 或 `gmake`
+
+Linux 额外依赖：
+
+- autotools: `autoconf`、`automake`、`libtool`
+- `objcopy`/`strip`: 通常来自 `binutils`
+
+macOS 额外依赖：
+
+- Xcode Command Line Tools
+- `dsymutil`
+
+脚本层 PATH 配置：
+
+- CMake 不硬编码工具链 PATH。
+- `scripts/*.sh` 会加载 `scripts/env.sh`。
+- 临时指定 PATH 前缀可用 `CRASHTRACE_PATH_PREPEND`。
+- 机器级配置可复制 `scripts/local_env.sh.example` 为 `scripts/local_env.sh` 后编辑；该文件已被 git 忽略。
+
+示例：
+
+```bash
+CRASHTRACE_PATH_PREPEND="/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin" \
+  ./scripts/build_release_symbols.sh
+```
+
+GNU `libunwind` 仓库不提交生成后的 `configure`，Linux 构建会用 `autoreconf` 从源码生成构建脚本：
 
 ```bash
 autoreconf --version
 ```
 
-缺少时可以安装构建工具 `autoconf`、`automake`、`libtool`，也可以使用默认 `auto` 或显式 `system` provider。
+常见安装命令：
+
+```bash
+# Ubuntu/Debian
+sudo apt-get install -y cmake build-essential autoconf automake libtool binutils
+
+# macOS
+xcode-select --install
+```
+
+Linux arm32 交叉编译还需要：
+
+```bash
+sudo apt-get install -y gcc-arm-linux-gnueabihf g++-arm-linux-gnueabihf binutils-arm-linux-gnueabihf
+```
 
 ## 构建
 
@@ -130,16 +176,24 @@ autoreconf --version
 ./scripts/build_release_symbols.sh
 ```
 
-强制使用 third-party `libunwind`：
+手动构建：
 
 ```bash
-./scripts/build_release_symbols.sh -DBACKTRACE_DEMO_LIBUNWIND_PROVIDER=bundled
+cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo
+cmake --build build --parallel
 ```
 
-强制使用系统/SDK `libunwind`：
+Linux arm32 交叉编译示例：
 
 ```bash
-./scripts/build_release_symbols.sh -DBACKTRACE_DEMO_LIBUNWIND_PROVIDER=system
+cmake -S . -B build-arm32 \
+  -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+  -DCMAKE_SYSTEM_NAME=Linux \
+  -DCMAKE_SYSTEM_PROCESSOR=arm \
+  -DCMAKE_C_COMPILER=arm-linux-gnueabihf-gcc \
+  -DCMAKE_CXX_COMPILER=arm-linux-gnueabihf-g++ \
+  -DBACKTRACE_DEMO_AUTOTOOLS_HOST_TRIPLE=arm-linux-gnueabihf
+cmake --build build-arm32 --parallel
 ```
 
 ## 平台说明

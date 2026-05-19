@@ -14,6 +14,8 @@
 
 namespace {
 
+constexpr const char* LOG_TAG = "crashtrace_release_demo";
+
 void SIGSEGV_handler(int signo, siginfo_t* info, void*) {
     crashtrace::DumpOptions options;
     options.skip_frames = 1;
@@ -45,7 +47,7 @@ BACKTRACE_DEMO_NOINLINE void doSomething() {
 }  // namespace
 
 int main() {
-    std::fprintf(stderr, "BTDEMO_START mode=release_collector\n");
+    std::fprintf(stderr, "%s: START mode=release_collector\n", LOG_TAG);
     signal_handle_init();
     doSomething();
     return 0;

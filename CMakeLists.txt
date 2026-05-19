@@ -17,10 +17,6 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}")
 find_package(Threads REQUIRED)
 find_program(MAKE_EXECUTABLE NAMES gmake make REQUIRED)
 
-set(BACKTRACE_DEMO_LIBUNWIND_PROVIDER "auto" CACHE STRING
-    "libunwind provider: auto, bundled, or system")
-set_property(CACHE BACKTRACE_DEMO_LIBUNWIND_PROVIDER PROPERTY STRINGS auto bundled system)
-
 function(configure_crashtrace_target target_name)
     if (UNIX)
         target_compile_options(${target_name} PRIVATE
@@ -33,6 +29,17 @@ function(configure_crashtrace_target target_name)
             $<$<CONFIG:Release>:-g>
             $<$<CONFIG:RelWithDebInfo>:-g>
             $<$<OR:$<CONFIG:Debug>,$<CONFIG:Release>,$<CONFIG:RelWithDebInfo>>:-gdwarf-4>
+        )
+
+        if (APPLE)
+            set(_crashtrace_rpath "@loader_path")
+        else()
+            set(_crashtrace_rpath "$ORIGIN")
+        endif()
+
+        set_target_properties(${target_name} PROPERTIES
+            BUILD_RPATH "${_crashtrace_rpath}"
+            INSTALL_RPATH "${_crashtrace_rpath}"
         )
     endif()
 endfunction()

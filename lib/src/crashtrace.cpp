@@ -1,8 +1,12 @@
 #include <crashtrace/crashtrace.hpp>
 
 #include <backtrace.h>
+#if defined(__APPLE__)
+#include <unwind.h>
+#else
 #define UNW_LOCAL_ONLY
 #include <libunwind.h>
+#endif
 
 #include <algorithm>
 #include <cinttypes>
@@ -44,6 +48,10 @@ struct ResolveContext {
     uintptr_t object_pc = 0;
     bool callback_called = false;
 };
+
+constexpr const char* kCollectorLogTag = "crashtrace_collector";
+constexpr const char* kDebugLogTag = "crashtrace_debug";
+constexpr const char* kFrameEvent = "FRAME";
 
 void backtrace_error_callback(void*, const char* message, int errnum) {
     if (errnum != 0) {
@@ -128,6 +136,7 @@ std::vector<uintptr_t> collect_unwind_frames(const DumpOptions& options) {
     std::vector<uintptr_t> pcs;
     pcs.reserve(options.max_frames);
 
+#if !defined(__APPLE__)
     unw_context_t context;
     unw_cursor_t cursor;
     if (unw_getcontext(&context) < 0 || unw_init_local(&cursor, &context) < 0) {
@@ -151,10 +160,41 @@ std::vector<uintptr_t> collect_unwind_frames(const DumpOptions& options) {
     } while (pcs.size() < options.max_frames && unw_step(&cursor) > 0);
 
     return pcs;
-}
+#else
+    struct CallbackContext {
+        std::vector<uintptr_t>* pcs = nullptr;
+        std::size_t max_frames = 0;
+        std::size_t skip_frames = 0;
+        std::size_t visited = 0;
+    };
 
-bool starts_with(const char* value, const char* prefix) {
-    return std::strncmp(value, prefix, std::strlen(prefix)) == 0;
+    CallbackContext context;
+    context.pcs = &pcs;
+    context.max_frames = options.max_frames;
+    context.skip_frames = options.skip_frames;
+
+    _Unwind_Backtrace(
+        [](_Unwind_Context* unwind_context, void* data) -> _Unwind_Reason_Code {
+            auto* callback_context = static_cast<CallbackContext*>(data);
+            const uintptr_t ip =
+                static_cast<uintptr_t>(_Unwind_GetIP(unwind_context));
+
+            if (ip != 0) {
+                if (callback_context->visited < callback_context->skip_frames) {
+                    ++callback_context->visited;
+                } else if (callback_context->pcs->size() < callback_context->max_frames) {
+                    callback_context->pcs->push_back(ip);
+                }
+            }
+
+            return callback_context->pcs->size() < callback_context->max_frames
+                       ? _URC_NO_REASON
+                       : _URC_END_OF_STACK;
+        },
+        &context);
+
+    return pcs;
+#endif
 }
 
 bool parse_hex(const char* value, uintptr_t* out) {
@@ -187,14 +227,40 @@ bool parse_decimal(const char* value, std::size_t* out) {
     return true;
 }
 
+char* find_tagged_event_payload(char* line, const char* tag, const char* event) {
+    if (line == nullptr || tag == nullptr || event == nullptr) {
+        return nullptr;
+    }
+
+    char* tag_separator = std::strstr(line, ": ");
+    if (tag_separator == nullptr) {
+        return nullptr;
+    }
+
+    const std::size_t tag_length = static_cast<std::size_t>(tag_separator - line);
+    if (std::strlen(tag) != tag_length || std::strncmp(line, tag, tag_length) != 0) {
+        return nullptr;
+    }
+
+    char* payload = tag_separator + 2;
+    const std::size_t event_length = std::strlen(event);
+    if (std::strncmp(payload, event, event_length) != 0 ||
+        (payload[event_length] != ' ' && payload[event_length] != '\t')) {
+        return nullptr;
+    }
+
+    return payload;
+}
+
 bool parse_frame_line(char* line, FrameRecord* record) {
-    if (line == nullptr || record == nullptr || !starts_with(line, "BTDEMO_FRAME ")) {
+    char* payload = find_tagged_event_payload(line, kCollectorLogTag, kFrameEvent);
+    if (payload == nullptr || record == nullptr) {
         return false;
     }
 
     FrameRecord parsed;
     char* save = nullptr;
-    (void)::strtok_r(line, " \t\r\n", &save);
+    (void)::strtok_r(payload, " \t\r\n", &save);
     for (char* token = ::strtok_r(nullptr, " \t\r\n", &save);
          token != nullptr;
          token = ::strtok_r(nullptr, " \t\r\n", &save)) {
@@ -283,7 +349,8 @@ int dump_release_stack_addresses(std::FILE* output,
     }
 
     std::fprintf(output,
-                 "BTDEMO_CRASH_V1 signal=%d fault=%p pid=%d\n",
+                 "%s: CRASH signal=%d fault=%p pid=%d\n",
+                 kCollectorLogTag,
                  signo,
                  fault_address,
                  static_cast<int>(getpid()));
@@ -292,11 +359,13 @@ int dump_release_stack_addresses(std::FILE* output,
     for (std::size_t i = 0; i < pcs.size(); ++i) {
         const ModuleAddress frame = resolve_module_address(pcs[i]);
         std::fprintf(output,
-                     "BTDEMO_FRAME index=%zu pc=0x%" PRIxPTR
+                     "%s: %s index=%zu pc=0x%" PRIxPTR
                      " module_base=0x%" PRIxPTR
                      " module_offset=0x%" PRIxPTR
                      " object_pc=0x%" PRIxPTR
                      " module=%s\n",
+                     kCollectorLogTag,
+                     kFrameEvent,
                      i,
                      frame.pc,
                      frame.module_base,
@@ -352,7 +421,8 @@ int dump_debug_stack_symbols(std::FILE* output,
     }
 
     std::fprintf(output,
-                 "BTDEMO_DEBUG_CRASH signal=%d fault=%p pid=%d\n",
+                 "%s: CRASH signal=%d fault=%p pid=%d\n",
+                 kDebugLogTag,
                  signo,
                  fault_address,
                  static_cast<int>(getpid()));
