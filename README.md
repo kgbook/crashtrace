@@ -1,4 +1,4 @@
-# crashtrace-demo
+# crashtrace
 
 这个工程把 C++ 崩溃栈能力拆成库、demo、工具和文档四层：
 
